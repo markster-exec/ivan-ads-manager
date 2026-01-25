@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insights - Ivan Ads Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="/account/<%= accountId %>" class="text-gray-600 hover:text-gray-800">&larr; Back</a>
+                <h1 class="text-xl font-bold">Ivan Ads Manager</h1>
+            </div>
+            <a href="/logout" class="text-gray-600 hover:text-gray-800">Logout</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold">Performance Insights</h2>
+
+            <form action="/account/<%= accountId %>/insights" method="GET" class="flex gap-2">
+                <select name="date_preset"
+                        class="border rounded px-3 py-2 bg-white"
+                        onchange="this.form.submit()">
+                    <option value="today" <%= datePreset === 'today' ? 'selected' : '' %>>Today</option>
+                    <option value="yesterday" <%= datePreset === 'yesterday' ? 'selected' : '' %>>Yesterday</option>
+                    <option value="last_7d" <%= datePreset === 'last_7d' ? 'selected' : '' %>>Last 7 Days</option>
+                    <option value="last_30d" <%= datePreset === 'last_30d' ? 'selected' : '' %>>Last 30 Days</option>
+                    <option value="this_month" <%= datePreset === 'this_month' ? 'selected' : '' %>>This Month</option>
+                    <option value="last_month" <%= datePreset === 'last_month' ? 'selected' : '' %>>Last Month</option>
+                </select>
+            </form>
+        </div>
+
+        <% if (insights && insights.length > 0) { %>
+            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                <% const data = insights[0]; %>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">Spend</p>
+                    <p class="text-2xl font-bold"><%= parseFloat(data.spend || 0).toFixed(2) %></p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">Impressions</p>
+                    <p class="text-2xl font-bold"><%= parseInt(data.impressions || 0).toLocaleString() %></p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">Clicks</p>
+                    <p class="text-2xl font-bold"><%= parseInt(data.clicks || 0).toLocaleString() %></p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">CTR</p>
+                    <p class="text-2xl font-bold"><%= parseFloat(data.ctr || 0).toFixed(2) %>%</p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">CPC</p>
+                    <p class="text-2xl font-bold"><%= parseFloat(data.cpc || 0).toFixed(2) %></p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">CPM</p>
+                    <p class="text-2xl font-bold"><%= parseFloat(data.cpm || 0).toFixed(2) %></p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">Reach</p>
+                    <p class="text-2xl font-bold"><%= parseInt(data.reach || 0).toLocaleString() %></p>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border p-6">
+                    <p class="text-sm text-gray-600 mb-1">Frequency</p>
+                    <p class="text-2xl font-bold"><%= parseFloat(data.frequency || 0).toFixed(2) %></p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border p-6">
+                <h3 class="font-semibold mb-4">Raw Data</h3>
+                <pre class="bg-gray-50 p-4 rounded overflow-auto text-sm"><%= JSON.stringify(insights, null, 2) %></pre>
+            </div>
+        <% } else { %>
+            <div class="bg-white rounded-lg shadow-sm border p-8 text-center">
+                <p class="text-gray-600">No insights data available for this period.</p>
+            </div>
+        <% } %>
+    </main>
+</body>
+</html>

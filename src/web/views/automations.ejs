@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automations - Ivan Ads Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="/account/<%= accountId %>" class="text-gray-600 hover:text-gray-800">&larr; Back</a>
+                <h1 class="text-xl font-bold">Ivan Ads Manager</h1>
+            </div>
+            <a href="/logout" class="text-gray-600 hover:text-gray-800">Logout</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold">Automations</h2>
+            <button onclick="showCreateModal()"
+                    class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition">
+                + New Rule
+            </button>
+        </div>
+
+        <% if (rules && rules.length > 0) { %>
+            <div class="space-y-4">
+                <% rules.forEach(rule => { %>
+                    <div class="bg-white rounded-lg shadow-sm border p-6">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <h3 class="font-semibold text-lg"><%= rule.name %></h3>
+                                    <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full
+                                        <%= rule.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' %>">
+                                        <%= rule.enabled ? 'Active' : 'Disabled' %>
+                                    </span>
+                                </div>
+                                <div class="text-sm text-gray-600 space-y-1">
+                                    <p>Trigger: <%= rule.trigger.type %> <% if (rule.trigger.cron) { %>(<%= rule.trigger.cron %>)<% } %></p>
+                                    <p>Actions: <%= rule.actions.map(a => a.type).join(', ') %></p>
+                                    <% if (rule.lastRunAt) { %>
+                                        <p>Last run: <%= new Date(rule.lastRunAt).toLocaleString() %></p>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="toggleRule('<%= rule.id %>')"
+                                        class="text-sm px-3 py-1 border rounded hover:bg-gray-50">
+                                    <%= rule.enabled ? 'Disable' : 'Enable' %>
+                                </button>
+                                <button onclick="runRule('<%= rule.id %>')"
+                                        class="text-sm px-3 py-1 border rounded hover:bg-gray-50 text-blue-600">
+                                    Run Now
+                                </button>
+                                <button onclick="deleteRule('<%= rule.id %>')"
+                                        class="text-sm px-3 py-1 border rounded hover:bg-gray-50 text-red-600">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                <% }) %>
+            </div>
+        <% } else { %>
+            <div class="bg-white rounded-lg shadow-sm border p-8 text-center">
+                <p class="text-gray-600 mb-4">No automation rules configured.</p>
+                <button onclick="showCreateModal()"
+                        class="text-purple-600 hover:text-purple-800">
+                    Create your first rule
+                </button>
+            </div>
+        <% } %>
+    </main>
+
+    <!-- Create Rule Modal -->
+    <div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <h3 class="text-xl font-bold mb-4">Create Automation Rule</h3>
+
+                <form id="createForm" onsubmit="createRule(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Rule Name</label>
+                            <input type="text" name="name" required
+                                   class="w-full border rounded px-3 py-2"
+                                   placeholder="e.g., Daily Spend Alert">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Trigger Type</label>
+                            <select name="triggerType" onchange="updateTriggerFields(this.value)"
+                                    class="w-full border rounded px-3 py-2">
+                                <option value="schedule">Schedule (Cron)</option>
+                                <option value="threshold">Metric Threshold</option>
+                            </select>
+                        </div>
+
+                        <div id="cronField">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Cron Schedule</label>
+                            <input type="text" name="cron"
+                                   class="w-full border rounded px-3 py-2"
+                                   placeholder="0 9 * * *"
+                                   value="0 9 * * *">
+                            <p class="text-xs text-gray-500 mt-1">e.g., "0 9 * * *" = 9 AM daily</p>
+                        </div>
+
+                        <div id="thresholdFields" class="hidden space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Metric</label>
+                                <select name="metric" class="w-full border rounded px-3 py-2">
+                                    <option value="spend">Spend</option>
+                                    <option value="ctr">CTR</option>
+                                    <option value="cpc">CPC</option>
+                                    <option value="impressions">Impressions</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Operator</label>
+                                    <select name="operator" class="w-full border rounded px-3 py-2">
+                                        <option value="gt">Greater than</option>
+                                        <option value="lt">Less than</option>
+                                        <option value="eq">Equal to</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Value</label>
+                                    <input type="number" name="value" step="0.01"
+                                           class="w-full border rounded px-3 py-2"
+                                           placeholder="100">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Check Interval (minutes)</label>
+                                <input type="number" name="checkInterval"
+                                       class="w-full border rounded px-3 py-2"
+                                       value="60" min="5">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Campaign Filter (optional)</label>
+                            <input type="text" name="campaignNameContains"
+                                   class="w-full border rounded px-3 py-2"
+                                   placeholder="Leave empty for all campaigns">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Action</label>
+                            <select name="action" class="w-full border rounded px-3 py-2">
+                                <option value="notify">Send Notification</option>
+                                <option value="pause">Pause Campaign</option>
+                                <option value="resume">Resume Campaign</option>
+                            </select>
+                        </div>
+
+                        <div id="notifyMessage">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Notification Message</label>
+                            <input type="text" name="notifyMessage"
+                                   class="w-full border rounded px-3 py-2"
+                                   placeholder="Alert: {campaign_name} threshold reached">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 mt-6">
+                        <button type="button" onclick="hideCreateModal()"
+                                class="px-4 py-2 border rounded hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                            Create Rule
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const accountId = '<%= accountId %>';
+
+        function showCreateModal() {
+            document.getElementById('createModal').classList.remove('hidden');
+            document.getElementById('createModal').classList.add('flex');
+        }
+
+        function hideCreateModal() {
+            document.getElementById('createModal').classList.add('hidden');
+            document.getElementById('createModal').classList.remove('flex');
+        }
+
+        function updateTriggerFields(type) {
+            const cronField = document.getElementById('cronField');
+            const thresholdFields = document.getElementById('thresholdFields');
+
+            if (type === 'schedule') {
+                cronField.classList.remove('hidden');
+                thresholdFields.classList.add('hidden');
+            } else {
+                cronField.classList.add('hidden');
+                thresholdFields.classList.remove('hidden');
+            }
+        }
+
+        async function createRule(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            const triggerType = formData.get('triggerType');
+            const trigger = { type: triggerType };
+
+            if (triggerType === 'schedule') {
+                trigger.cron = formData.get('cron');
+            } else {
+                trigger.metric = formData.get('metric');
+                trigger.operator = formData.get('operator');
+                trigger.value = parseFloat(formData.get('value'));
+                trigger.checkInterval = parseInt(formData.get('checkInterval'));
+            }
+
+            const rule = {
+                name: formData.get('name'),
+                accountId: 'act_' + accountId,
+                enabled: true,
+                trigger: trigger,
+                conditions: {
+                    campaignNameContains: formData.get('campaignNameContains') || undefined
+                },
+                actions: [{
+                    type: formData.get('action'),
+                    notifyMessage: formData.get('action') === 'notify' ? formData.get('notifyMessage') : undefined
+                }]
+            };
+
+            try {
+                const response = await fetch('/api/automations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(rule)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function toggleRule(ruleId) {
+            try {
+                const response = await fetch(`/api/automations/${ruleId}/toggle`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function runRule(ruleId) {
+            try {
+                const response = await fetch(`/api/automations/${ruleId}/run`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Rule executed successfully');
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function deleteRule(ruleId) {
+            if (!confirm('Are you sure you want to delete this rule?')) return;
+
+            try {
+                const response = await fetch(`/api/automations/${ruleId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

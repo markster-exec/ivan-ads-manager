@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account - Ivan Ads Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-gray-600 hover:text-gray-800">&larr; Back</a>
+                <h1 class="text-xl font-bold">Ivan Ads Manager</h1>
+            </div>
+            <a href="/logout" class="text-gray-600 hover:text-gray-800">Logout</a>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold"><%= account?.name || 'Account ' + accountId %></h2>
+                <p class="text-gray-600">ID: act_<%= accountId %></p>
+            </div>
+            <div class="flex gap-2">
+                <a href="/account/<%= accountId %>/insights"
+                   class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                    View Insights
+                </a>
+                <a href="/account/<%= accountId %>/automations"
+                   class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition">
+                    Automations
+                </a>
+            </div>
+        </div>
+
+        <h3 class="text-xl font-semibold mb-4">Campaigns</h3>
+
+        <% if (campaigns && campaigns.length > 0) { %>
+            <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Campaign</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Status</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Objective</th>
+                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-600">Daily Budget</th>
+                            <th class="px-4 py-3 text-right text-sm font-semibold text-gray-600">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        <% campaigns.forEach(campaign => { %>
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3">
+                                    <div class="font-medium"><%= campaign.name %></div>
+                                    <div class="text-xs text-gray-500"><%= campaign.id %></div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full
+                                        <%= campaign.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                                           campaign.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' :
+                                           'bg-gray-100 text-gray-800' %>">
+                                        <%= campaign.status %>
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-600">
+                                    <%= campaign.objective || '-' %>
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    <% if (campaign.daily_budget) { %>
+                                        <%= (campaign.daily_budget / 100).toFixed(2) %> <%= account?.currency || '' %>
+                                    <% } else { %>
+                                        -
+                                    <% } %>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <% if (campaign.status === 'ACTIVE') { %>
+                                        <button
+                                            onclick="apiCall('/api/campaign/<%= campaign.id %>/pause')"
+                                            class="text-sm text-yellow-600 hover:text-yellow-800">
+                                            Pause
+                                        </button>
+                                    <% } else if (campaign.status === 'PAUSED') { %>
+                                        <button
+                                            onclick="apiCall('/api/campaign/<%= campaign.id %>/resume')"
+                                            class="text-sm text-green-600 hover:text-green-800">
+                                            Resume
+                                        </button>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        <% } else { %>
+            <div class="bg-white rounded-lg shadow-sm border p-8 text-center">
+                <p class="text-gray-600">No campaigns found.</p>
+            </div>
+        <% } %>
+    </main>
+
+    <script>
+        async function apiCall(url, method = 'POST') {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '...';
+
+            try {
+                const response = await fetch(url, { method });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
