@@ -6,3 +6,4 @@ startCommand = "npm run start:web"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
+# Trigger redeploy
