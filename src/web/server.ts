@@ -148,6 +148,12 @@ app.get("/debug", async (req, res) => {
       DASHBOARD_PASSWORD: process.env.DASHBOARD_PASSWORD ? "SET" : "NOT SET",
     },
     metaClientInitialized: !!metaClient,
+    automationEngine: automationEngine ? {
+      initialized: true,
+      usingRedis: automationEngine.isUsingRedis(),
+      rulesCount: automationEngine.getAllRules().length,
+    } : { initialized: false },
+    redisUrl: process.env.REDIS_URL ? "SET" : "NOT SET",
   };
 
   // Try to validate token with Meta API
@@ -347,7 +353,7 @@ app.post("/api/automations", requireAuth, async (req, res) => {
     }
 
     const rule = req.body;
-    const id = automationEngine.addRule(rule);
+    const id = await automationEngine.addRule(rule);
     res.json({ success: true, id });
   } catch (error) {
     console.error("Error creating automation:", error);
@@ -362,7 +368,7 @@ app.delete("/api/automations/:ruleId", requireAuth, async (req, res) => {
     }
 
     const { ruleId } = req.params;
-    automationEngine.removeRule(ruleId);
+    await automationEngine.removeRule(ruleId);
     res.json({ success: true });
   } catch (error) {
     console.error("Error deleting automation:", error);
@@ -377,7 +383,7 @@ app.post("/api/automations/:ruleId/toggle", requireAuth, async (req, res) => {
     }
 
     const { ruleId } = req.params;
-    automationEngine.toggleRule(ruleId);
+    await automationEngine.toggleRule(ruleId);
     res.json({ success: true });
   } catch (error) {
     console.error("Error toggling automation:", error);

@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import cron from "node-cron";
+import { createClient, RedisClientType } from "redis";
 import type { MetaApiClient } from "../meta-client.js";
 import type { SlackNotifier } from "../notifications/slack.js";
 
@@ -36,6 +37,8 @@ export interface AutomationRule {
   lastRunAt?: string;
 }
 
+const REDIS_KEY = "ivan-ads-manager:automations";
+
 export class AutomationEngine {
   private rules: Map<string, AutomationRule> = new Map();
   private cronJobs: Map<string, cron.ScheduledTask> = new Map();
@@ -43,6 +46,8 @@ export class AutomationEngine {
   private dataPath: string;
   private metaClient: MetaApiClient;
   private slackNotifier: SlackNotifier | null;
+  private redisClient: RedisClientType | null = null;
+  private useRedis: boolean = false;
 
   constructor(metaClient: MetaApiClient, slackNotifier: SlackNotifier | null = null) {
     this.metaClient = metaClient;
@@ -51,6 +56,22 @@ export class AutomationEngine {
   }
 
   async start(): Promise<void> {
+    // Try to connect to Redis if URL is provided
+    if (process.env.REDIS_URL) {
+      try {
+        this.redisClient = createClient({ url: process.env.REDIS_URL });
+        this.redisClient.on("error", (err) => console.error("Redis error:", err));
+        await this.redisClient.connect();
+        this.useRedis = true;
+        console.log("✅ Connected to Redis for automation persistence");
+      } catch (error) {
+        console.error("❌ Failed to connect to Redis, using file storage:", error);
+        this.useRedis = false;
+      }
+    } else {
+      console.log("⚠️ No REDIS_URL set, using file storage (automations won't persist across deploys)");
+    }
+
     await this.loadRules();
     this.scheduleAllRules();
     console.log(`📋 Loaded ${this.rules.size} automation rules`);
@@ -58,24 +79,41 @@ export class AutomationEngine {
 
   private async loadRules(): Promise<void> {
     try {
-      if (fs.existsSync(this.dataPath)) {
-        const data = fs.readFileSync(this.dataPath, "utf-8");
-        const rules: AutomationRule[] = JSON.parse(data);
-        rules.forEach((rule) => this.rules.set(rule.id, rule));
+      if (this.useRedis && this.redisClient) {
+        const data = await this.redisClient.get(REDIS_KEY);
+        if (data) {
+          const rules: AutomationRule[] = JSON.parse(data);
+          rules.forEach((rule) => this.rules.set(rule.id, rule));
+          console.log(`📥 Loaded ${rules.length} rules from Redis`);
+        }
+      } else {
+        // Fallback to file storage
+        if (fs.existsSync(this.dataPath)) {
+          const data = fs.readFileSync(this.dataPath, "utf-8");
+          const rules: AutomationRule[] = JSON.parse(data);
+          rules.forEach((rule) => this.rules.set(rule.id, rule));
+        }
       }
     } catch (error) {
       console.error("Error loading automation rules:", error);
     }
   }
 
-  private saveRules(): void {
+  private async saveRules(): Promise<void> {
     try {
-      const dir = path.dirname(this.dataPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
       const rules = Array.from(this.rules.values());
-      fs.writeFileSync(this.dataPath, JSON.stringify(rules, null, 2));
+
+      if (this.useRedis && this.redisClient) {
+        await this.redisClient.set(REDIS_KEY, JSON.stringify(rules));
+        console.log(`📤 Saved ${rules.length} rules to Redis`);
+      } else {
+        // Fallback to file storage
+        const dir = path.dirname(this.dataPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(this.dataPath, JSON.stringify(rules, null, 2));
+      }
     } catch (error) {
       console.error("Error saving automation rules:", error);
     }
@@ -196,7 +234,7 @@ export class AutomationEngine {
       // Update last run time
       rule.lastRunAt = new Date().toISOString();
       this.rules.set(rule.id, rule);
-      this.saveRules();
+      await this.saveRules();
     } catch (error) {
       console.error(`Error executing rule "${rule.name}":`, error);
     }
@@ -266,7 +304,7 @@ export class AutomationEngine {
 
   // Public API
 
-  addRule(ruleData: Omit<AutomationRule, "id" | "createdAt">): string {
+  async addRule(ruleData: Omit<AutomationRule, "id" | "createdAt">): Promise<string> {
     const id = `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const rule: AutomationRule = {
       ...ruleData,
@@ -275,7 +313,7 @@ export class AutomationEngine {
     };
 
     this.rules.set(id, rule);
-    this.saveRules();
+    await this.saveRules();
 
     if (rule.enabled) {
       this.scheduleRule(rule);
@@ -285,19 +323,19 @@ export class AutomationEngine {
     return id;
   }
 
-  removeRule(ruleId: string): void {
+  async removeRule(ruleId: string): Promise<void> {
     this.unscheduleRule(ruleId);
     this.rules.delete(ruleId);
-    this.saveRules();
+    await this.saveRules();
     console.log(`🗑️ Removed automation rule: ${ruleId}`);
   }
 
-  toggleRule(ruleId: string): void {
+  async toggleRule(ruleId: string): Promise<void> {
     const rule = this.rules.get(ruleId);
     if (rule) {
       rule.enabled = !rule.enabled;
       this.rules.set(ruleId, rule);
-      this.saveRules();
+      await this.saveRules();
 
       if (rule.enabled) {
         this.scheduleRule(rule);
@@ -326,11 +364,19 @@ export class AutomationEngine {
     return Array.from(this.rules.values());
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.cronJobs.forEach((job) => job.stop());
     this.intervalJobs.forEach((job) => clearInterval(job));
     this.cronJobs.clear();
     this.intervalJobs.clear();
+    if (this.redisClient) {
+      await this.redisClient.quit();
+    }
     console.log("⏹️ Automation engine stopped");
+  }
+
+  // Check if Redis is being used
+  isUsingRedis(): boolean {
+    return this.useRedis;
   }
 }
