@@ -97,6 +97,56 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Debug endpoint to check configuration
+app.get("/debug", async (req, res) => {
+  const token = process.env.META_ACCESS_TOKEN;
+  const debugInfo: any = {
+    timestamp: new Date().toISOString(),
+    env: {
+      META_ACCESS_TOKEN: token ? `${token.substring(0, 10)}...${token.substring(token.length - 5)}` : "NOT SET",
+      META_APP_ID: process.env.META_APP_ID ? "SET" : "NOT SET",
+      META_APP_SECRET: process.env.META_APP_SECRET ? "SET" : "NOT SET",
+      DASHBOARD_PASSWORD: process.env.DASHBOARD_PASSWORD ? "SET" : "NOT SET",
+    },
+    metaClientInitialized: !!metaClient,
+  };
+
+  // Try to validate token with Meta API
+  if (token && metaClient) {
+    try {
+      const accounts = await metaClient.getAdAccounts();
+      debugInfo.metaApiTest = {
+        success: true,
+        accountCount: accounts.length,
+        accounts: accounts.map((a: any) => ({ id: a.id, name: a.name })),
+      };
+    } catch (error: any) {
+      debugInfo.metaApiTest = {
+        success: false,
+        error: error.message,
+        details: error.response?.data || error.cause || "No additional details",
+      };
+    }
+  } else if (token && !metaClient) {
+    // Try to make a direct API call to test the token
+    try {
+      const response = await fetch(`https://graph.facebook.com/v23.0/me?access_token=${token}`);
+      const data = await response.json();
+      debugInfo.directApiTest = {
+        success: response.ok,
+        data: data,
+      };
+    } catch (error: any) {
+      debugInfo.directApiTest = {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  res.json(debugInfo);
+});
+
 // Login routes
 app.get("/login", (req, res) => {
   res.render("login", { error: null });
