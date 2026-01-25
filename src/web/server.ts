@@ -97,6 +97,45 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Test Slack endpoint
+app.get("/test-slack", async (req, res) => {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    return res.json({ success: false, error: "SLACK_WEBHOOK_URL not set" });
+  }
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: "🧪 Test message from Ivan Ads Manager!",
+        blocks: [
+          {
+            type: "header",
+            text: { type: "plain_text", text: "✅ Slack Integration Working!", emoji: true }
+          },
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: "This is a test message from *Ivan Ads Manager*.\n\nIf you see this, Slack notifications are configured correctly!" }
+          }
+        ]
+      }),
+    });
+
+    const text = await response.text();
+    res.json({
+      success: response.ok,
+      status: response.status,
+      response: text,
+      webhookConfigured: webhookUrl.substring(0, 40) + "..."
+    });
+  } catch (error: any) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // Debug endpoint to check configuration
 app.get("/debug", async (req, res) => {
   const token = process.env.META_ACCESS_TOKEN;
