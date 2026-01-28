@@ -150,3 +150,7 @@ MIT
 ## Credits
 
 Built on [meta-ads-mcp](https://github.com/brijr/meta-mcp) by [brijr](https://github.com/brijr).
+
+---
+
+*Last updated: 2026-01-27 by Claude (Opus 4.5)*
